@@ -1,0 +1,1 @@
+Solve the 3x3 Rubiks Cube through scanning each face with cv2 and then generating a solution with kociembas algorithm.
