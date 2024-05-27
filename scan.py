@@ -59,21 +59,31 @@ class Cube_Scanner:
         # Preprocess the image
         new_image = self.cube_preprocess(image)
         contours = cv2.findContours(new_image.copy(), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)[0]
+        contour_areas = [w * h for cnt in contours for epsilon in [0.1 * cv2.arcLength(cnt, True)] for approx in [cv2.approxPolyDP(cnt, epsilon, True)] if len(approx) == 4 for (x, y, w, h) in [cv2.boundingRect(approx)]]
+        average_area = sum(contour_areas) / len(contour_areas)
         for cnt in contours:
             epsilon = 0.1 * cv2.arcLength(cnt, True)
             approx = cv2.approxPolyDP(cnt, epsilon, True)
             (x, y, w, h) = cv2.boundingRect(approx)
-            self.tiles.append((x, y, w, h))
-
+            if (len(approx) == 4 and w*h <= average_area/2):
+                self.tiles.append((x, y, w, h))
+    
     def scan(self, image_path):
         for filename in os.listdir(image_path):
+            self.tiles.clear()
             filepath = os.path.join(image_path, filename)
             image = cv2.imread(filepath)
             if image is not None:
                 self.find_stickers(image)
-        return self.tiles
+                self.draw_tiles(image)
+
+    def draw_tiles(self, image):
+        for tile in self.tiles:
+            cv2.rectangle(image, (tile[0:2]), (tile[0] + tile[2], tile[1] + tile[3]), (0, 255, 0), 20)
+            cv2.imshow("Cube Scanner", image)
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
 
 if __name__ == "__main__":
     cube_scanner = Cube_Scanner()
-    tiles = cube_scanner.scan("cube image")
-    print(tiles)
+    cube_scanner.scan("cube image")
