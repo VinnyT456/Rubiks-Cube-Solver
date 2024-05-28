@@ -75,15 +75,21 @@ class Cube_Scanner:
             image = cv2.imread(filepath)
             if image is not None:
                 self.find_stickers(image)
+                self.sort_tiles()
                 self.draw_tiles(image)
+    
+    def sort_tiles(self):
+        self.tiles.sort(key=lambda tile: tile[0])
+        grouped_tiles = [self.tiles[i:i+3] for i in range(0, len(self.tiles), 3)]
+        sorted_tile = [sorted(group, key=lambda x: x[1], reverse=True) for group in grouped_tiles]
+        self.tiles = [tile for group in sorted_tile for tile in group]
 
-    def draw_tiles(self, image):
+    def draw_tiles(self,image):
         for tile in self.tiles:
-            cv2.rectangle(image, (tile[0:2]), (tile[0] + tile[2], tile[1] + tile[3]), (0, 255, 0), 20)
-            cv2.imshow("Cube Scanner", image)
+            cv2.rectangle(image,(tile[0:2]),(tile[0]+tile[2],tile[1]+tile[3]),(0,255,0),30)
+            cv2.imshow("Image",image)
             cv2.waitKey(0)
             cv2.destroyAllWindows()
-
 if __name__ == "__main__":
     cube_scanner = Cube_Scanner()
     cube_scanner.scan("cube image")
