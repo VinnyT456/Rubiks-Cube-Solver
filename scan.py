@@ -2,21 +2,26 @@ import cv2
 import numpy as np
 from sklearn.cluster import KMeans
 from scipy.spatial import cKDTree
-from collections import Counter
-import matplotlib.pyplot as plt
 
 class Cube_Scanner:
     def __init__(self):
         self.color_pattern = {
-            "red": (),
-            "orange": (),
-            "blue": (),
-            "green": (),
-            "white": (),
-            "yellow": ()
+            "White": (),
+            "Yellow": (),
+            "Orange": (),
+            "Red": (),
+            "Blue": (),
+            "Green": ()
+        }
+        self.sticker_colors = {
+            "White": (255, 255, 255),
+            "Yellow": (0,255,255),
+            "Orange": (0,165,255),
+            "Red": (0,0,255),
+            "Blue": (255,0,0),
+            "Green": (0,255,0)
         }
         self.color_names = list(self.color_pattern.keys())
-        self.color_values = list(self.color_pattern.values())
         self.tiles = []
         self.scramble = []
         self.centers = []
@@ -31,59 +36,14 @@ class Cube_Scanner:
         self.current_color_index = 0
         self.predict_color_state = False
         self.extract_color_state = False
+        self.draw_color_state = False
+        self.draw_preview_face_state = False
 
     def classify_tile_color(self, bgr_color) -> str:
-        kdtree = cKDTree(self.color_values)
+        color_values = list(self.color_pattern.values())
+        kdtree = cKDTree(color_values)
         dist, idx = kdtree.query(bgr_color)
         return self.color_names[idx]
-    
-    def visualize_clusters(self, tile_roi, mask, kmeans, pixels):
-        cluster_centers = kmeans.cluster_centers_
-        labels = kmeans.labels_
-
-        # Create a blank image to visualize clusters
-        cluster_img = np.zeros((50, 500, 3), dtype=np.uint8)
-
-        # Calculate the number of pixels in each cluster
-        counts = np.bincount(labels)
-
-        # Sort clusters by the number of pixels
-        sorted_indices = np.argsort(counts)[::-1]
-
-        # Calculate the width of each segment
-        total_pixels = pixels.shape[0]
-        start = 0
-
-        for i in sorted_indices:
-            cluster_color = cluster_centers[i].astype(int)
-            width = int(counts[i] / total_pixels * cluster_img.shape[1])
-            end = start + width
-            cluster_img[:, start:end, :] = cluster_color
-            start = end
-
-        # Plot the original ROI, mask, and color clusters
-        plt.figure(figsize=(15, 5))
-
-        # Original ROI
-        plt.subplot(1, 3, 1)
-        plt.imshow(cv2.cvtColor(tile_roi, cv2.COLOR_BGR2RGB))
-        plt.title('Original ROI')
-        plt.axis('off')
-
-        # Mask
-        plt.subplot(1, 3, 2)
-        plt.imshow(mask, cmap='gray')
-        plt.title('Brightness Mask')
-        plt.axis('off')
-
-        # Color Clusters
-        plt.subplot(1, 3, 3)
-        plt.imshow(cv2.cvtColor(cluster_img, cv2.COLOR_BGR2RGB))
-        plt.title('Color Clusters')
-        plt.axis('off')
-
-        plt.show()
-
     def get_average_color(self, min_brightness=80, max_brightness=250) -> list[tuple]:
         average_colors = []
         for tile in self.tiles:
@@ -117,8 +77,6 @@ class Cube_Scanner:
             dominant_color = tuple(int(c) for c in dominant_color)
 
             dominant_color_rgb = (dominant_color[2], dominant_color[1], dominant_color[0])
-
-            #self.visualize_clusters(tile_roi, mask, kmeans, pixels)
 
             average_colors.append(dominant_color_rgb)
         
@@ -160,33 +118,28 @@ class Cube_Scanner:
             x, y, w, h = cv2.boundingRect(approx)
             aspect_ratio = w / h
             if 0.8 <= aspect_ratio <= 1.2:
+                cv2.rectangle(self.frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
                 self.tiles.append((x, y, w, h))
 
     def predict_color(self):
         self.find_stickers()
-        if (len(self.tiles) == 9 and self.check_valid_tiles_1()):
+        if (len(self.tiles) == 9 and self.check_valid_tiles_1() and self.check_center_piece()):
             dominant_colors = self.get_average_color()
             colors = [self.classify_tile_color(color) for color in dominant_colors]
             self.draw_tiles()
             print(colors if len(colors) == 9 or 8 else "")
             if (colors[4] not in self.centers):
                 self.current_face.append(colors) 
-            if (len(self.current_face) == 100):
-                self.find_final_face()
-                exit
-        '''
-        if (len(self.tiles) == 8 and self.check_valid_tiles_2()):
-            dominant_colors = [self.get_average_color(tile) for tile in self.tiles]
+            self.centers.append(colors[4])
+        elif (len(self.tiles) == 8 and self.check_valid_tiles_2() and self.check_center_piece() != True):
+            dominant_colors = self.get_average_color()
+            dominant_colors.insert(4, self.color_pattern["White"])
             colors = [self.classify_tile_color(color) for color in dominant_colors]
-            colors.insert(4, "white")
             self.draw_tiles()
             print(colors if len(colors) == 9 else "")
             if (colors[4] not in self.centers):
-                self.current_face.append(colors) '''
-    def find_final_face(self) -> None:
-        tuple_list = [tuple(sublist) for sublist in self.current_face]
-        face = Counter(tuple_list)
-        print(face)
+                self.current_face.append(colors)
+            self.centers.append(colors[4])
 
     def check_center_piece(self) -> bool:
         # Determine bounding box
@@ -237,58 +190,81 @@ class Cube_Scanner:
         self.find_stickers()
         if (len(self.tiles) == 9 and self.check_valid_tiles_1() and self.check_center_piece):
             dominant_colors = self.get_average_color()
-            print(*self.tiles,sep="\n")
-            self.draw_tiles()
             self.bgr.append(dominant_colors)
-            if (len(self.bgr) == 25):
-                rgb_values = [y for x in self.bgr for y in x]
-                average_rgb = tuple(np.mean(rgb_values, axis=0).astype(int))
-                self.bgr.clear()
-                self.color_pattern[self.color_names[self.current_color_index]] = average_rgb
-                self.current_color_index += 1
-                self.extract_color_state = False
-                print("Done")
+            rgb_values = [y for x in self.bgr for y in x]
+            average_rgb = tuple(np.mean(rgb_values, axis=0).astype(int))
+            self.bgr.clear()
+            self.color_pattern[self.color_names[self.current_color_index]] = average_rgb
         elif (len(self.tiles) == 8 and self.check_valid_tiles_2() and self.check_center_piece() != True): 
             dominant_colors = self.get_average_color()
-            print(*self.tiles,sep="\n")
-            self.draw_tiles()
             self.bgr.append(dominant_colors)
-            if (len(self.bgr) == 25):
-                rgb_values = [y for x in self.bgr for y in x]
-                average_rgb = tuple(np.mean(rgb_values,axis=0).astype(int))
-                self.bgr.clear()
-                self.color_pattern[self.color_names[self.current_color_index]] = average_rgb
-                self.current_color_index += 1
-                self.extract_color_state = False
-                print("Done")
+            rgb_values = [y for x in self.bgr for y in x]
+            average_rgb = tuple(np.mean(rgb_values,axis=0).astype(int))
+            self.bgr.clear()
+            self.color_pattern[self.color_names[self.current_color_index]] = average_rgb
 
     def draw_extracted_color(self):
-        cv2.rectangle(self.frame, (10,10), (50,50), (0,0,0), 3)
-        cv2.rectangle(self.frame, (10,60), (50,100), (0,0,0), 3)
-        cv2.rectangle(self.frame, (10,110), (50,150), (0,0,0), 3)
-        cv2.rectangle(self.frame, (10,160), (50,200), (0,0,0), 3)
-        cv2.rectangle(self.frame, (10,210), (50,250), (0,0,0), 3)
-        cv2.rectangle(self.frame, (10,260), (50,300), (0,0,0), 3)
+        if (self.draw_color_state):
+            overlay = self.frame.copy()
+            # Draw rectangles
+            for position, (color_name, color) in enumerate(self.color_pattern.items()):
+                if color != ():
+                    cv2.rectangle(overlay, (10, 10 + (50 * position)), (50, 50 + (50 * position)), (int(color[2]),int(color[1]),int(color[0])),-1)
+                else:
+                    cv2.rectangle(overlay, (10, 10 + (50 * position)), (50, 50 + (50 * position)), (0, 0, 0),2)
+            # Add text
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            for position, color_name in enumerate(self.color_pattern.keys()):
+                cv2.putText(overlay, color_name, (60, 35 + position * 50), font, 0.8, (255, 255, 255), 2, cv2.LINE_AA)
+            # Blend overlay with the frame
+            alpha = 1.0  # Transparency factor
+            self.frame = cv2.addWeighted(overlay, alpha, self.frame, 1 - alpha, 0)
+
+    def draw_preview_face(self):
+        if (self.draw_preview_face_state):
+            overlay = self.frame.copy()
+            # Draw rectangles
+            for i in range(3):
+                for j in range(3):
+                    top_left = (10 + j * 70, 10 + i * 70)
+                    bottom_right = (10 + (j + 1) * 70, 10 + (i + 1) * 70)
+                    cv2.rectangle(overlay, top_left, bottom_right, (0, 0, 0), 2)
+            alpha = 1.0  # Transparency factor
+            self.frame = cv2.addWeighted(overlay, alpha, self.frame, 1 - alpha, 0)
+
                 
     def scan(self) -> None:
         while True:
             ret, self.frame = self.cam.read()
+
             if not ret:
                 break
             key = cv2.waitKey(1) & 0xFF
 
             self.draw_extracted_color()
 
+            self.draw_preview_face()
+
             cv2.imshow("Image", self.frame)
 
             if (self.extract_color_state and self.current_color_index < len(self.color_names)):
                 self.extract_color()
+                if (self.color_pattern[self.color_names[self.current_color_index]] != ()):
+                    self.current_color_index += 1
+                    self.extract_color_state = False
+
+            if (self.predict_color_state and self.extract_color_state != True):
+                self.predict_color()
 
             if (key == ord('q')):
-                break
+                exit()
             elif (key == ord('e')):
-                self.extract_color_state = True
-        print(self.color_pattern)
+                self.extract_color_state = not self.extract_color_state
+                self.draw_color_state = True
+            elif (key == ord('s') and all(value != () for value in self.color_pattern.values())):
+                self.predict_color_state = not self.predict_color_state
+                self.draw_preview_face_state = not self.draw_preview_face_state
+                self.draw_color_state = False
 
     def sort_tiles(self) -> None:
         self.tiles.sort(key=lambda tile: tile[0])
