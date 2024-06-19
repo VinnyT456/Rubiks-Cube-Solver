@@ -44,6 +44,7 @@ class Cube_Scanner:
         kdtree = cKDTree(color_values)
         dist, idx = kdtree.query(bgr_color)
         return self.color_names[idx]
+    
     def get_average_color(self, min_brightness=80, max_brightness=250) -> list[tuple]:
         average_colors = []
         for tile in self.tiles:
@@ -81,7 +82,6 @@ class Cube_Scanner:
             average_colors.append(dominant_color_rgb)
         
         return average_colors
-        
     
     def cube_preprocess(self) -> None:
         gray = cv2.cvtColor(self.frame, cv2.COLOR_BGR2GRAY)
@@ -92,7 +92,7 @@ class Cube_Scanner:
         thresh = cv2.threshold(dilated, 0, 255, cv2.THRESH_BINARY)[1]
         return thresh
     
-    def find_stickers(self) -> None:
+    def find_stickers(self,predict_sticker=False) -> None:
         new_image = self.cube_preprocess()
         contours, _ = cv2.findContours(new_image.copy(), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
 
@@ -105,6 +105,21 @@ class Cube_Scanner:
         max_area = average_area * 1.5
 
         self.tiles = []
+        preview_face_rects = [
+            ((10 + j * 70, 10 + i * 70), (10 + (j + 1) * 70, 10 + (i + 1) * 70))
+            for i in range(3)
+            for j in range(3)
+        ]
+
+        def is_in_preview_rects(x, y, w, h):
+            for top_left, bottom_right in preview_face_rects:
+                if (
+                    x >= top_left[0] and y >= top_left[1] and
+                    x + w <= bottom_right[0] and y + h <= bottom_right[1]
+                ):
+                    return True
+            return False
+
         for cnt in contours:
             area = cv2.contourArea(cnt)
             if area < min_area or area > max_area:
@@ -117,74 +132,28 @@ class Cube_Scanner:
 
             x, y, w, h = cv2.boundingRect(approx)
             aspect_ratio = w / h
-            if 0.8 <= aspect_ratio <= 1.2:
-                cv2.rectangle(self.frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
-                self.tiles.append((x, y, w, h))
+            if (predict_sticker):
+                if (0.8 <= aspect_ratio <= 1.2 and not is_in_preview_rects(x, y, w, h)):
+                    self.tiles.append((x, y, w, h))
+            else:
+                if (0.8 <= aspect_ratio <= 1.2):
+                    self.tiles.append((x, y, w, h))
+
 
     def predict_color(self):
-        self.find_stickers()
+        self.find_stickers(True)
+        if (len(self.tiles) == 8 and self.check_valid_tiles_1 and self.check_center_piece):
+            self.find_center_piece()
         if (len(self.tiles) == 9 and self.check_valid_tiles_1() and self.check_center_piece()):
             dominant_colors = self.get_average_color()
             colors = [self.classify_tile_color(color) for color in dominant_colors]
             self.draw_tiles()
-            print(colors if len(colors) == 9 or 8 else "")
+            print(colors)
             if (colors[4] not in self.centers):
-                self.current_face.append(colors) 
+                pass
+            self.current_face = colors
+            self.draw_preview_face()
             self.centers.append(colors[4])
-        elif (len(self.tiles) == 8 and self.check_valid_tiles_2() and self.check_center_piece() != True):
-            dominant_colors = self.get_average_color()
-            dominant_colors.insert(4, self.color_pattern["White"])
-            colors = [self.classify_tile_color(color) for color in dominant_colors]
-            self.draw_tiles()
-            print(colors if len(colors) == 9 else "")
-            if (colors[4] not in self.centers):
-                self.current_face.append(colors)
-            self.centers.append(colors[4])
-
-    def check_center_piece(self) -> bool:
-        # Determine bounding box
-        left = min(tile[0] for tile in self.tiles)
-        right = max(tile[0] + tile[2] for tile in self.tiles)
-        top = min(tile[1] for tile in self.tiles)
-        bottom = max(tile[1] + tile[3] for tile in self.tiles)
-
-        # Create a coverage matrix
-        width = right - left
-        height = bottom - top
-        coverage = np.zeros((height, width), dtype=bool)
-
-        # Mark the coverage of each tile in the matrix
-        for x, y, w, h in self.tiles:
-            coverage[(y-top):(y-top+h), (x-left):(x-left+w)] = True
-
-        # Calculate the center region within the bounding box
-        center_x = width // 2
-        center_y = height // 2
-
-        # Define the center piece region (assuming center piece is 1x1)
-        # Check if the center of the bounding box is covered
-        has_center_piece = coverage[center_y, center_x]
-
-        return has_center_piece
-    
-    def check_valid_tiles_1(self) -> bool:
-        self.sort_tiles()
-        grouped_tiles = [self.tiles[i:i+3] for i in range(0, len(self.tiles), 3)]
-        for group in grouped_tiles:
-            avg = np.mean(group, axis=0)
-            for x in group:
-                if (x[0] < avg[0] - 5) or (x[0] > avg[0] + 5):
-                    return False
-        return True
-    
-    def check_valid_tiles_2(self) -> bool:
-        self.special_sort()
-        tile_1 = self.tiles[0]
-        tile_2 = self.tiles[-1]
-        for x in self.tiles:
-            if (tile_1[0]-5 >= x[0] >= tile_2[0]+5) and (tile_1[1]-5 >= x[1] >= tile_2[1]+5):
-                return False
-        return True
     
     def extract_color(self) -> None:
         self.find_stickers()
@@ -217,7 +186,7 @@ class Cube_Scanner:
             for position, color_name in enumerate(self.color_pattern.keys()):
                 cv2.putText(overlay, color_name, (60, 35 + position * 50), font, 0.8, (255, 255, 255), 2, cv2.LINE_AA)
             # Blend overlay with the frame
-            alpha = 1.0  # Transparency factor
+            alpha = 1  # Transparency factor
             self.frame = cv2.addWeighted(overlay, alpha, self.frame, 1 - alpha, 0)
 
     def draw_preview_face(self):
@@ -225,13 +194,18 @@ class Cube_Scanner:
             overlay = self.frame.copy()
             # Draw rectangles
             for i in range(3):
-                for j in range(3):
-                    top_left = (10 + j * 70, 10 + i * 70)
-                    bottom_right = (10 + (j + 1) * 70, 10 + (i + 1) * 70)
+                for j in range(3,0,-1):
+                    top_left = (10 + i * 70, 10 + (j-1) * 70)
+                    bottom_right = (10 + (i + 1) * 70, 10 + j * 70)
                     cv2.rectangle(overlay, top_left, bottom_right, (0, 0, 0), 2)
-            alpha = 1.0  # Transparency factor
-            self.frame = cv2.addWeighted(overlay, alpha, self.frame, 1 - alpha, 0)
+                    top_left = (12 + i * 70, 12 + (j-1) * 70)
+                    bottom_right = (12 + i * 70 + 66, 12 + (j-1) * 70 + 66)
+                    if (self.current_face != []):
+                        color = self.sticker_colors[self.current_face[i * 3 + (3-j)]]
+                        cv2.rectangle(overlay, top_left, bottom_right, (int(color[0]),int(color[1]),int(color[2])),-1)
 
+            alpha = 1  # Transparency factor
+            self.frame = cv2.addWeighted(overlay, alpha, self.frame, 1 - alpha, 0)
                 
     def scan(self) -> None:
         while True:
@@ -263,8 +237,82 @@ class Cube_Scanner:
                 self.draw_color_state = True
             elif (key == ord('s') and all(value != () for value in self.color_pattern.values())):
                 self.predict_color_state = not self.predict_color_state
-                self.draw_preview_face_state = not self.draw_preview_face_state
+                self.draw_preview_face_state = True
                 self.draw_color_state = False
+
+    def check_center_piece(self) -> bool:
+        # Determine bounding box
+        left = min(tile[0] for tile in self.tiles)
+        right = max(tile[0] + tile[2] for tile in self.tiles)
+        top = min(tile[1] for tile in self.tiles)
+        bottom = max(tile[1] + tile[3] for tile in self.tiles)
+
+        # Create a coverage matrix
+        width = right - left
+        height = bottom - top
+        coverage = np.zeros((height, width), dtype=bool)
+
+        # Mark the coverage of each tile in the matrix
+        for x, y, w, h in self.tiles:
+            coverage[(y-top):(y-top+h), (x-left):(x-left+w)] = True
+
+        # Calculate the center region within the bounding box
+        center_x = width // 2
+        center_y = height // 2
+
+        # Define the center piece region (assuming center piece is 1x1)
+        # Check if the center of the bounding box is covered
+        has_center_piece = coverage[center_y, center_x]
+
+        return has_center_piece
+    
+    def find_center_piece(self):
+        # Select the relevant tiles
+        self.tiles_copy = [self.tiles[1], self.tiles[3], self.tiles[4], self.tiles[6]]
+        
+        # Determine bounding box
+        left = min(tile[0] for tile in self.tiles_copy)
+        right = max(tile[0] + tile[2] for tile in self.tiles_copy)
+        top = min(tile[1] for tile in self.tiles_copy)
+        bottom = max(tile[1] + tile[3] for tile in self.tiles_copy)
+
+        # Calculate center of the bounding box
+        center_x = (left + right) // 2
+        center_y = (top + bottom) // 2
+
+        # Calculate average width and height of the tiles
+        average_width = sum(tile[2] for tile in self.tiles_copy) // len(self.tiles_copy)
+        average_height = sum(tile[3] for tile in self.tiles_copy) // len(self.tiles_copy)
+
+        # Calculate top-left corner of the center piece
+        center_piece_x = center_x - average_width // 2
+        center_piece_y = center_y - average_height // 2
+
+        # The center piece dimensions
+        center_piece_w = average_width
+        center_piece_h = average_height
+
+        center_piece = (center_piece_x, center_piece_y, center_piece_w, center_piece_h)
+        self.tiles.insert(4,center_piece)
+    
+    def check_valid_tiles_1(self) -> bool:
+        self.sort_tiles()
+        grouped_tiles = [self.tiles[i:i+3] for i in range(0, len(self.tiles), 3)]
+        for group in grouped_tiles:
+            avg = np.mean(group, axis=0)
+            for x in group:
+                if (x[0] < avg[0] - 5) or (x[0] > avg[0] + 5):
+                    return False
+        return True
+    
+    def check_valid_tiles_2(self) -> bool:
+        self.special_sort()
+        tile_1 = self.tiles[0]
+        tile_2 = self.tiles[-1]
+        for x in self.tiles:
+            if (tile_1[0]-5 >= x[0] >= tile_2[0]+5) and (tile_1[1]-5 >= x[1] >= tile_2[1]+5):
+                return False
+        return True
 
     def sort_tiles(self) -> None:
         self.tiles.sort(key=lambda tile: tile[0])
@@ -282,7 +330,6 @@ class Cube_Scanner:
         for tile in self.tiles:
             cv2.rectangle(self.frame, (tile[0], tile[1]), (tile[0]+tile[2], tile[1]+tile[3]), (0, 255, 0),5)
             cv2.imshow("Image",self.frame)
-
 if __name__ == "__main__":
     cube_scanner = Cube_Scanner()
     cube_scanner.scan()
