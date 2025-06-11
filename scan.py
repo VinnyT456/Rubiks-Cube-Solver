@@ -1,8 +1,6 @@
 import cv2
 import numpy as np
-import os
 import torch
-import copy
 from solver import *
 from torchvision import transforms, models
 from PIL import Image
@@ -33,12 +31,46 @@ class VideoThread(QThread):
                 self.frame_processed.emit(rgb_frame)
 
     def process_frame(self, frame):
+        if self.scanner.stickerless_mode:
+            # Get frame dimensions
+            height, width = frame.shape[:2]
+            
+            # Calculate centered grid dimensions
+            grid_size = 3
+            total_grid_size = min(width, height) * 0.6
+            cell_size = int(total_grid_size / grid_size)
+            
+            # Calculate top-left corner of grid to center it
+            start_x = int((width - (cell_size * grid_size)) / 2)
+            start_y = int((height - (cell_size * grid_size)) / 2)
+            
+            # Draw the outer rectangle of the grid
+            cv2.rectangle(frame, 
+                        (start_x, start_y), 
+                        (start_x + cell_size * grid_size, start_y + cell_size * grid_size), 
+                        (0, 0, 0), 4)
+            
+            # Draw grid lines
+            for i in range(1, grid_size):
+                # Horizontal lines
+                cv2.line(frame, 
+                        (start_x, start_y + i * cell_size), 
+                        (start_x + grid_size * cell_size, start_y + i * cell_size), 
+                        (0, 0, 0), 4)
+                # Vertical lines
+                cv2.line(frame, 
+                        (start_x + i * cell_size, start_y), 
+                        (start_x + i * cell_size, start_y + grid_size * cell_size), 
+                        (0, 0, 0), 4)
+
         if self.scanner.predict_color_state:
             self.scanner.frame = frame.copy()
             if not self.scanner.current_face:
                 self.scanner.predict_color()
                 if self.scanner.current_face:
                     self.colors_detected.emit(self.scanner.current_face)
+                    self.predict_color_state = False
+
 
 class CubeGrid(QWidget):
     def __init__(self):
@@ -60,6 +92,18 @@ class CubeGrid(QWidget):
             "Blue": (255, 0, 0),
             "Green": (0, 255, 0)
         }
+
+        self.cell_positions = {
+            (0,0):(0,2),
+            (0,1):(1,2),
+            (0,2):(2,2),
+            (1,0):(0,1),
+            (1,1):(1,1),
+            (1,2):(2,1),
+            (2,0):(0,0),
+            (2,1):(1,0),
+            (2,2):(2,0),
+        } 
 
         self.background_color = "#333333"
         self.border_color = "#404040"
@@ -109,9 +153,12 @@ class CubeGrid(QWidget):
 
     def update_cell_and_storage(self, row, col, rgb, color_name):
         self.set_cell_color(row, col, rgb)
-        index = row * 3 + col
+        new_row,new_col = self.cell_positions[(row, col)]
+        index = new_row * 3 + new_col
+        print(self.current_face_scanned)
         if index < len(self.current_face_scanned):
             self.current_face_scanned[index] = color_name
+            print(self.current_face_scanned)
         else:
             self.current_face_scanned += [None] * (index - len(self.current_face_scanned) + 1)
             self.current_face_scanned[index] = color_name
@@ -283,11 +330,17 @@ class CubeScanner(QObject):
             self.window.cube_grid.current_face_scanned.append(color_name)
 
     def toggle_scan(self):
-        self.predict_color_state = not self.predict_color_state
-        self.window.scan_btn.setText("Stop Scan" if self.predict_color_state else "Start Scan")
+        if (not self.stickerless_mode):
+            self.predict_color_state = not self.predict_color_state
+            self.window.scan_btn.setText("Stop Scan" if self.predict_color_state else "Start Scan")
+        else:
+            self.predict_color_state = not self.predict_color_state
+            self.window.scan_btn.setText("Scan")
 
     def toggle_verify(self):
+        print(self.window.cube_grid.current_face_scanned)
         if (self.window.cube_grid.current_face_scanned != [] or self.current_face.clear() != []):
+            print(self.window.cube_grid.current_face_scanned)
             self.scramble.append(self.window.cube_grid.current_face_scanned.copy())
             self.window.cube_grid.current_face_scanned.clear()
             self.current_face.clear()
@@ -296,11 +349,16 @@ class CubeScanner(QObject):
                 row, col = position
                 self.window.cube_grid.set_cell_color(row, col, (51,51,51))
             if len(self.scramble) == 6:
-                for _ in range(2): 
-                    self.scramble[_] = self.scramble[_].copy()[::-1]
+                self.scramble = np.array(self.scramble)
+                self.scramble = self.scramble.reshape(6, 3, 3)
+                print(self.scramble)
+            if (self.stickerless_mode):
+                self.predict_color_state = False
 
     def toggle_mode(self):
         self.stickerless_mode = not self.stickerless_mode
+        self.predict_color_state = False
+        self.window.scan_btn.setText("Scan" if self.stickerless_mode else "Start Scan")
         self.window.mode_toggle_btn.setText("Stickerless Mode" if self.stickerless_mode else "Sticker Mode")
 
     def toggle_solver(self):
@@ -320,6 +378,7 @@ class CubeScanner(QObject):
     def classify_tile_color(self) -> str:
         colors = []
         class_names = ['Blue', 'Green', 'Orange', 'Red', 'White', 'Yellow']
+
         for tile in self.tiles:
             x, y, w, h = tile
             tile_roi = self.frame[y:y+h, x:x+w]
@@ -349,7 +408,7 @@ class CubeScanner(QObject):
         return thresh
 
     def find_stickers(self) -> None:
-        if (self.stickerless_mode):
+        if (not self.stickerless_mode):
             new_image = self.cube_preprocess()
             contours, _ = cv2.findContours(new_image.copy(), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
 
@@ -379,7 +438,28 @@ class CubeScanner(QObject):
                     self.tiles.append((x, y, w, h))
 
         else:
-            pass
+            # Create a mask for the grid area (initialize with black)
+            height, width = self.frame.shape[:2]
+            
+            # Calculate grid dimensions (same as what's displayed in the video)
+            grid_size = 3
+            total_grid_size = min(width, height) * 0.8
+            cell_size = int(total_grid_size / grid_size)
+            
+            # Calculate grid origin point (top-left corner)
+            start_x = int((width - (cell_size * grid_size)) / 2)
+            start_y = int((height - (cell_size * grid_size)) / 2)
+                
+            for row in range(grid_size):
+                for col in range(grid_size):
+                    # Calculate cell coordinates
+                    x = start_x + col * cell_size + cell_size // 2
+                    y = start_y + row * cell_size + cell_size // 2
+                    w = cell_size - cell_size // 2
+                    h = cell_size - cell_size // 2
+                    
+                    # Add tile coordinates to the tiles list
+                    self.tiles.append((x, y, w, h))
 
     def predict_color(self):
         self.find_stickers()
