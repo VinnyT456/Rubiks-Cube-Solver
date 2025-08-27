@@ -155,10 +155,8 @@ class CubeGrid(QWidget):
         self.set_cell_color(row, col, rgb)
         new_row,new_col = self.cell_positions[(row, col)]
         index = new_row * 3 + new_col
-        print(self.current_face_scanned)
         if index < len(self.current_face_scanned):
             self.current_face_scanned[index] = color_name
-            print(self.current_face_scanned)
         else:
             self.current_face_scanned += [None] * (index - len(self.current_face_scanned) + 1)
             self.current_face_scanned[index] = color_name
@@ -338,22 +336,71 @@ class CubeScanner(QObject):
             self.window.scan_btn.setText("Scan")
 
     def toggle_verify(self):
-        print(self.window.cube_grid.current_face_scanned)
-        if (self.window.cube_grid.current_face_scanned != [] or self.current_face.clear() != []):
-            print(self.window.cube_grid.current_face_scanned)
-            self.scramble.append(self.window.cube_grid.current_face_scanned.copy())
-            self.window.cube_grid.current_face_scanned.clear()
-            self.current_face.clear()
-            cell_position = [(2,0),(1,0),(0,0),(2,1),(1,1),(0,1),(2,2),(1,2),(0,2)]
-            for position in cell_position:
-                row, col = position
-                self.window.cube_grid.set_cell_color(row, col, (51,51,51))
-            if len(self.scramble) == 6:
-                self.scramble = np.array(self.scramble)
-                self.scramble = self.scramble.reshape(6, 3, 3)
-                print(self.scramble)
-            if (self.stickerless_mode):
-                self.predict_color_state = False
+        if (self.predict_color_state == True):
+            if (self.window.cube_grid.current_face_scanned != [] or self.current_face.clear() != []):
+                face = [self.window.cube_grid.current_face_scanned[i + j*3] for i in range(2,-1,-1) for j in range(3)]
+                self.scramble.append(face.copy())
+                self.window.cube_grid.current_face_scanned.clear()
+                self.current_face.clear()
+                cell_position = [(2,0),(1,0),(0,0),(2,1),(1,1),(0,1),(2,2),(1,2),(0,2)]
+                for position in cell_position:
+                    row, col = position
+                    self.window.cube_grid.set_cell_color(row, col, (51,51,51))
+                if len(self.scramble) == 6:
+                    self.scramble = np.array(self.scramble)
+                    self.scramble = self.scramble.reshape(6, 3, 3)
+
+                    self.scramble = np.vectorize(lambda s: s.lower())(self.scramble)
+                    self.scramble = np.vectorize(lambda s: s[0])(self.scramble)
+
+                    final_scramble = {
+                        'U':[],
+                        'D':[],
+                        'F':[],
+                        'L':[],
+                        'B':[],
+                        'R':[]
+                    }
+
+                    color_order = ['y', 'w', 'g', 'r', 'b', 'o' ]
+
+                    # Create color -> rank mapping
+                    order_index = {color: i for i, color in enumerate(color_order)}
+
+                    # Get index of each face sorted by center color's priority
+                    sorted_indices = sorted(range(6), key=lambda i: order_index[self.scramble[i, 1, 1]])
+
+                    # Sort the cube using those indices
+                    sorted_cube = self.scramble[sorted_indices]
+
+                    for position, face in zip(final_scramble.keys(), sorted_cube):
+                        final_scramble[position] = face
+
+                    #Flip every face except white and yellow
+
+                    final_scramble['F'] = np.rot90(final_scramble['F'],2)
+                    final_scramble['B'] = np.rot90(final_scramble['B'],2)
+                    final_scramble['L'] = np.rot90(final_scramble['L'],2)
+                    final_scramble['R'] = np.rot90(final_scramble['R'],2)                
+
+                    cube = Cube(final_scramble)
+
+                    cross = cross_solver(cube)
+                    new_cube, cross_solution = cross.solve_cross()
+                    cube.set_state(new_cube)
+
+                    print(cube)
+                    
+                    corner = corner_solver(cube)
+                    corner_solution = corner.solve_corners()
+                    new_cube = corner.get_state()
+                    cube.set_state(new_cube)
+                    
+                    cube.display_cube()
+                
+
+                if (self.stickerless_mode):
+                    self.predict_color_state = False
 
     def toggle_mode(self):
         self.stickerless_mode = not self.stickerless_mode
@@ -370,7 +417,12 @@ class CubeScanner(QObject):
         for param in model.parameters():
             param.requires_grad = False
         model.fc = torch.nn.Linear(model.fc.in_features, num_classes)
-        model.load_state_dict(torch.load(model_path, map_location=self.device), strict=False)
+        state_dict = torch.load(
+            model_path, 
+            map_location=self.device, 
+            weights_only=True  # <— key addition
+        )
+        model.load_state_dict(state_dict, strict=False)
         model.eval()
         model.to(self.device)
         return model
