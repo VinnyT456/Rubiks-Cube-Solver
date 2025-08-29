@@ -105,21 +105,18 @@ class CubeGrid(QWidget):
             (2,2):(2,0),
         } 
 
-        self.background_color = "#333333"
-        self.border_color = "#404040"
-        self.hover_border_color = "#606060"
-
         for row in range(3):
             for col in range(3):
                 cell = QLabel()
                 cell.setFixedSize(105, 105)
                 cell.setStyleSheet(f"""
                     QLabel {{
-                        background-color: {self.background_color};
-                        border: 2px solid {self.border_color};
+                        background: qlineargradient(x1:0, y1:1, x2:1, y2:0,stop:0 #e3f2fd,stop:1 #bbdefb);
+                        border: 2px solid #e1f5fe;
+                        border-radius: 10px;
                     }}
                     QLabel:hover {{
-                        border: 2px solid {self.hover_border_color};
+                        border: 2px solid #667eea;
                     }}
                 """)
                 cell.mousePressEvent = lambda event, r=row, c=col: self.show_color_menu(r, c)
@@ -136,18 +133,34 @@ class CubeGrid(QWidget):
             menu = QMenu(self)
             menu.setStyleSheet("""
                 QMenu {
-                    background-color: #404040;
-                    color: white;
-                    padding: 4px;
+                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                        stop:0 #2e2e38,
+                        stop:1 #1f1f27);
+                    color: #f0f0f0;
+                    border: 1px solid #3a3a44;
+                    border-radius: 10px;
+                    padding: 6px;
+                }
+                QMenu::item {
+                    padding: 6px 20px;
+                    border-radius: 6px;
                 }
                 QMenu::item:selected {
-                    background-color: #505050;
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                        stop:0 #6a5acd,
+                        stop:1 #836fff);
+                    color: white;
+                }
+                QMenu::separator {
+                    height: 1px;
+                    background: #444;
+                    margin: 4px 8px;
                 }
             """)
             for name, bgr in self.sticker_colors.items():
                 action = QAction(self.create_color_icon(bgr), name, self)
-                action.triggered.connect(lambda _, r=row, c=col, rgb=bgr, n=name: 
-                                    self.update_cell_and_storage(r, c, rgb, n))
+                action.triggered.connect(lambda _, r=row, c=col, gradient=bgr, n=name: 
+                                    self.update_cell_and_storage(r, c, gradient, n))
                 menu.addAction(action)
             menu.exec(self.cells[(row, col)].mapToGlobal(self.cells[(row, col)].rect().center()))
 
@@ -161,11 +174,12 @@ class CubeGrid(QWidget):
             self.current_face_scanned += [None] * (index - len(self.current_face_scanned) + 1)
             self.current_face_scanned[index] = color_name
 
-    def set_cell_color(self, row, col, rgb):
+    def set_cell_color(self, row, col, gradient):
         self.cells[(row, col)].setStyleSheet(f"""
             QLabel {{
-                background-color: rgb({rgb[2]}, {rgb[1]}, {rgb[0]});
-                border: 2px solid #404040;
+                background-color: {gradient};
+                border: 2px solid #e1f5fe;
+                border-radius: 10px;
             }}
         """)
 
@@ -173,7 +187,8 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Cube Solver")
-        self.setFixedSize(1040, 640)
+        self.setFixedSize(1140, 640)
+        self.setWindowFlag(Qt.WindowType.FramelessWindowHint)
         
         main_widget = QWidget()
         main_layout = QHBoxLayout()
@@ -184,13 +199,24 @@ class MainWindow(QMainWindow):
         self.video_label = QLabel()
         self.video_label.setFixedSize(700, 640)
         self.video_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.video_label.setStyleSheet("background-color: #2A2A2A;")
+        self.video_label.setStyleSheet("""
+            background: transparent;
+            """
+        )
         
         # Control panel
         control_panel = QWidget()
         control_layout = QVBoxLayout()
         control_layout.setContentsMargins(5, 5, 5, 5)
         control_layout.setSpacing(8)
+        control_panel.setObjectName("controlPanel")
+        control_panel.setStyleSheet("""
+            QWidget#controlPanel {
+                background: rgba(255, 255, 255, 240);
+                border-radius: 24px;
+                border: 1px solid rgba(255, 255, 255, 100);
+            }
+        """)
         
         self.cube_grid = CubeGrid()
         control_layout.addWidget(self.cube_grid)
@@ -199,18 +225,22 @@ class MainWindow(QMainWindow):
         self.mode_toggle_btn = QPushButton("Sticker Mode")
         self.mode_toggle_btn.setFixedHeight(50)
         self.mode_toggle_btn.setCheckable(True)
+        self.mode_toggle_btn.setObjectName("stickerButton")
         
         self.scan_btn = QPushButton("Start Scan")
         self.scan_btn.setFixedHeight(50)
         self.scan_btn.setCheckable(True)
+        self.scan_btn.setObjectName("scanButton")
         
         self.verify_btn = QPushButton("Verify Face")
         self.verify_btn.setFixedHeight(50)
         self.verify_btn.setCheckable(True)
+        self.verify_btn.setObjectName("verifyButton")
 
         self.solver_btn = QPushButton("Full Cube Solver")
         self.solver_btn.setFixedHeight(50)
         self.solver_btn.setCheckable(True)
+        self.solver_btn.setObjectName("solverButton")
         
         control_layout.addWidget(self.scan_btn)
         control_layout.addWidget(self.verify_btn)
@@ -231,21 +261,27 @@ class MainWindow(QMainWindow):
     def set_style(self):
         self.setStyleSheet("""
             QMainWindow {
-                background-color: #2A2A2A;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #7f9cf5, stop:0.5 #b299f8, stop:1 #a15ee0);
             }
             QPushButton {
-                background-color: #444444;
                 color: white;
                 border: none;
+                border-radius: 16px;
                 font: bold 16px;
-                padding: 4px;
-                        
+                font-weight: 600;
+                padding: 12px 18px;                
             }
-            QPushButton:hover {
-                background-color: #555555;
+            QPushButton#scanButton {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,stop:0 #667eea,stop:1 #764ba2);
             }
-            QPushButton:checked {
-                background-color: #666666;
+            QPushButton#verifyButton {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,stop:0 #9c27b0,stop:1 #e91e63);
+            }
+            QPushButton#stickerButton {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,stop:0 #3f51b5,stop:1 #2196f3);
+            }
+            QPushButton#solverButton {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,stop:0 #673ab7,stop:1 #9c27b0);
             }
         """)
 
@@ -262,12 +298,12 @@ class CubeScanner(QObject):
         self.window.scanner = self
         
         self.sticker_colors = {
-            "Blue": (255,0,0),
-            "Green": (0,255,0),
-            "Orange": (0,165,255),
-            "Red": (0,0,255),
-            "White": (255,255,255),
-            "Yellow": (0,255,255)
+            "Blue": "qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #42a5f5, stop:1 #1565c0)",
+            "Green": "qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #66bb6a, stop:1 #388e3c)",
+            "Orange": "qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #ffa726, stop:1 #f57c00)",
+            "Red": "qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #ef5350, stop:1 #c62828)",
+            "White": "qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #ffffff, stop:1 #e0e0e0)",
+            "Yellow": "qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #fff176, stop:1 #fdd835)"
         }
 
         self.color_names = list(self.sticker_colors.keys())
@@ -345,7 +381,7 @@ class CubeScanner(QObject):
                 cell_position = [(2,0),(1,0),(0,0),(2,1),(1,1),(0,1),(2,2),(1,2),(0,2)]
                 for position in cell_position:
                     row, col = position
-                    self.window.cube_grid.set_cell_color(row, col, (51,51,51))
+                    self.window.cube_grid.set_cell_color(row, col, "qlineargradient(x1:0, y1:1, x2:1, y2:0,stop:0 #e3f2fd,stop:1 #bbdefb)")
                 if len(self.scramble) == 6:
                     self.scramble = np.array(self.scramble)
                     self.scramble = self.scramble.reshape(6, 3, 3)
@@ -389,7 +425,7 @@ class CubeScanner(QObject):
                     new_cube, cross_solution = cross.solve_cross()
                     cube.set_state(new_cube)
 
-                    print(cube)
+                    print(cross_solution)
                     
                     corner = corner_solver(cube)
                     corner_solution = corner.solve_corners()
