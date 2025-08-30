@@ -256,6 +256,9 @@ class Cube:
     def get_center_color(self, face):
         return self.cube[face][1,1]
     
+    def get_face(self, face):
+        return copy.deepcopy(self.cube[face])
+    
     def apply_solution(self,solution):
         for _ in solution:
             self.apply_move(_)
@@ -1198,7 +1201,45 @@ class second_layer_edge_solver(Cube):
             self.set_state(new_cube)
             self.new_cube.set_state(new_cube)
     
-        return self.get_state(), self.solutions
+        return new_cube, self.solutions
+
+class last_layer_yellow_cross_solver(Cube):
+    def __init__(self, cube_data):
+        super().__init__(cube_data.get_state())
+
+    def generate_yellow_cross_solution(self) -> list[str]:
+        if (cube_state["U"][1,1] == 'y'):
+            positions = np.array([(0,1), (1,0), (1,2), (2,1)])
+            yellow_face = self.get_face("U")
+            row, col = zip(*positions)
+            yellow_edges = yellow_face[row,col] == 'y'
+            number_of_yellow_edges = np.sum(yellow_edges)
+            if number_of_yellow_edges == 4:
+                return []
+            elif number_of_yellow_edges == 2:
+                if (yellow_edges[0] and yellow_edges[3]):
+                    return ["U","F","R",'U',"R'","U'","F'"]
+                elif (yellow_edges[1] and yellow_edges[2]):
+                    return ["F","R",'U',"R'","U'","F'"]
+                else:
+                    if (yellow_edges[0] and yellow_edges[1]):
+                        return ["F","R",'U',"R'","U'","R","U","R'","U'","F'"]
+                    elif (yellow_edges[1] and yellow_edges[3]):
+                        return ["U","F","R",'U',"R'","U'","R","U","R'","U'","F'"]
+                    elif (yellow_edges[0] and yellow_edges[2]):
+                        return ["U'","F","R",'U',"R'","U'","R","U","R'","U'","F'"]
+                    elif (yellow_edges[2] and yellow_edges[3]):
+                        return ["U2","F","R",'U',"R'","U'","R","U","R'","U'","F'"]
+            elif number_of_yellow_edges == 0:
+                return ["F","R","U","R'","U'","F'","U2","F","R","U","R'","U'","R","U","R'","U'","F'"]
+
+    def solve_yellow_cross(self):
+        solution = self.generate_yellow_cross_solution()
+        self.apply_solution(solution)
+        new_cube = self.get_state()
+        self.set_state(new_cube)
+
+        return new_cube, solution
 
 if __name__ == '__main__':
     cube_state = {
@@ -1226,8 +1267,11 @@ if __name__ == '__main__':
     cube.set_state(new_cube)
 
     edge_solver = second_layer_edge_solver(cube)
-    edge_solution = edge_solver.solve_edge()
-    new_cube = edge_solver.get_state()
+    new_cube, edge_solution = edge_solver.solve_edge()
+    cube.set_state(new_cube)
+
+    last_layer_yellow_cross_solver = last_layer_yellow_cross_solver(cube)
+    new_cube, last_layer_yellow_cross_solution = last_layer_yellow_cross_solver.solve_yellow_cross()
     cube.set_state(new_cube)
 
     cube.display_cube()
