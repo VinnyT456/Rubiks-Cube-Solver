@@ -83,8 +83,17 @@ class CubeGrid(QWidget):
 
         self.current_face_scanned = []
         self.verified_face = []
-        
+
         self.sticker_colors = {
+            "Blue": "qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #42a5f5, stop:1 #1565c0)",
+            "Green": "qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #66bb6a, stop:1 #388e3c)",
+            "Orange": "qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #ffa726, stop:1 #f57c00)",
+            "Red": "qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #ef5350, stop:1 #c62828)",
+            "White": "qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #ffffff, stop:1 #e0e0e0)",
+            "Yellow": "qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #fff176, stop:1 #fdd835)"
+        }
+        
+        self.sticker_colors_icon = {
             "White": (255, 255, 255),
             "Yellow": (0, 255, 255),
             "Orange": (0, 165, 255),
@@ -157,9 +166,10 @@ class CubeGrid(QWidget):
                     margin: 4px 8px;
                 }
             """)
-            for name, bgr in self.sticker_colors.items():
-                action = QAction(self.create_color_icon(bgr), name, self)
-                action.triggered.connect(lambda _, r=row, c=col, gradient=bgr, n=name: 
+            for name, gradient in self.sticker_colors.items():
+                rgb = self.sticker_colors_icon[name]
+                action = QAction(self.create_color_icon(rgb), name, self)
+                action.triggered.connect(lambda _, r=row, c=col, gradient=gradient, n=name: 
                                     self.update_cell_and_storage(r, c, gradient, n))
                 menu.addAction(action)
             menu.exec(self.cells[(row, col)].mapToGlobal(self.cells[(row, col)].rect().center()))
@@ -195,19 +205,38 @@ class MainWindow(QMainWindow):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
-        # Video display
+        # Video panel with white background
+        video_panel = QWidget()
+        video_panel.setObjectName("videoPanel")
+        video_panel.setStyleSheet("""
+            QWidget#videoPanel {
+                background: rgba(255, 255, 255, 240);
+                border-radius: 24px;
+                border: 1px solid rgba(255, 255, 255, 100);
+            }
+        """)
+        video_panel.setFixedSize(700, 580)
+        
+        # Layout for video panel
+        video_layout = QVBoxLayout()
+        video_layout.setContentsMargins(20, 10, 20, 10)         
+
+        # Video display 
         self.video_label = QLabel()
-        self.video_label.setFixedSize(700, 640)
+        self.video_label.setFixedSize(660, 550) 
         self.video_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.video_label.setStyleSheet("""
             background: transparent;
-            """
-        )
+            border-radius: 20px;
+        """)
         
+        video_layout.addWidget(self.video_label)
+        video_panel.setLayout(video_layout)
+
         # Control panel
         control_panel = QWidget()
         control_layout = QVBoxLayout()
-        control_layout.setContentsMargins(5, 5, 5, 5)
+        control_layout.setContentsMargins(10, 10, 10, 10)
         control_layout.setSpacing(8)
         control_panel.setObjectName("controlPanel")
         control_panel.setStyleSheet("""
@@ -251,7 +280,7 @@ class MainWindow(QMainWindow):
         control_panel.setFixedWidth(360)
         control_panel.setFixedHeight(600)
         
-        main_layout.addWidget(self.video_label)
+        main_layout.addWidget(video_panel)
         main_layout.addWidget(control_panel)
         
         self.set_style()
@@ -274,14 +303,27 @@ class MainWindow(QMainWindow):
             QPushButton#scanButton {
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:1,stop:0 #667eea,stop:1 #764ba2);
             }
+            QPushButton#scanButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                    stop:0 #8096f0, stop:1 #8a5fd4);
+            }
             QPushButton#verifyButton {
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:1,stop:0 #9c27b0,stop:1 #e91e63);
+            }
+            QPushButton#verifyButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,stop:0 #b23bd0, stop:1 #f24581);
             }
             QPushButton#stickerButton {
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:1,stop:0 #3f51b5,stop:1 #2196f3);
             }
+            QPushButton#stickerButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,stop:0 #5266d3, stop:1 #42a5f5);
+            }
             QPushButton#solverButton {
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:1,stop:0 #673ab7,stop:1 #9c27b0);
+            }
+            QPushButton#solverButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,stop:0 #7c52c8, stop:1 #af3cc2);
             }
         """)
 
@@ -373,7 +415,7 @@ class CubeScanner(QObject):
 
     def toggle_verify(self):
         if (self.predict_color_state == True):
-            if (self.window.cube_grid.current_face_scanned != [] or self.current_face.clear() != []):
+            if (self.window.cube_grid.current_face_scanned != [] and self.current_face != []):
                 face = [self.window.cube_grid.current_face_scanned[i + j*3] for i in range(2,-1,-1) for j in range(3)]
                 self.scramble.append(face.copy())
                 self.window.cube_grid.current_face_scanned.clear()
@@ -423,15 +465,23 @@ class CubeScanner(QObject):
 
                     cross = cross_solver(cube)
                     new_cube, cross_solution = cross.solve_cross()
-                    cube.set_state(new_cube)
+                    
+                    cube = Cube(new_cube)
 
-                    print(cross_solution)
-                    
                     corner = corner_solver(cube)
-                    corner_solution = corner.solve_corners()
-                    new_cube = corner.get_state()
-                    cube.set_state(new_cube)
-                    
+                    new_cube, corner_solution = corner.solve_corners()
+
+                    cube = Cube(new_cube)
+
+                    second_layer_edge = second_layer_edge_solver(cube)
+                    new_cube, second_layer_edge_solution = second_layer_edge.solve_edge()
+
+                    cube = Cube(new_cube)
+
+                    last_layer_yellow_cross = last_layer_yellow_cross_solver(cube)
+                    new_cube, last_layer_yellow_cross_solution = last_layer_yellow_cross.solve_yellow_cross()
+
+                    cube = Cube(new_cube)
                     cube.display_cube()
                 
 
@@ -456,7 +506,7 @@ class CubeScanner(QObject):
         state_dict = torch.load(
             model_path, 
             map_location=self.device, 
-            weights_only=True  # <— key addition
+            weights_only=True
         )
         model.load_state_dict(state_dict, strict=False)
         model.eval()
@@ -499,7 +549,6 @@ class CubeScanner(QObject):
         if (not self.stickerless_mode):
             new_image = self.cube_preprocess()
             contours, _ = cv2.findContours(new_image.copy(), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
-
             contour_areas = [cv2.contourArea(cnt) for cnt in contours]
             if not contour_areas:
                 return
