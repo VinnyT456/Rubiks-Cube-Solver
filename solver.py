@@ -416,8 +416,8 @@ class cross_solver(Cube):
         solution = self.ida_star()
         self.apply_solution(solution)
         new_cube = self.get_state()
-        return new_cube, solution
-    
+        return new_cube, solution   
+
 class corner_solver(Cube):
     def __init__(self,cube_data):
         super().__init__(cube_data.get_state())
@@ -1241,6 +1241,97 @@ class last_layer_yellow_cross_solver(Cube):
 
         return new_cube, solution
 
+class oll_solver(Cube):
+    def __init__(self, cube_data):
+        super().__init__(cube_data.get_state())
+        self.last_layer_cross_algorithm_table = {
+            2:{
+                "F R U' R' U' R U2 R' U' F'":np.array([
+                    [0,0,0],
+                    [0,0,0],
+                    [1,0,0],
+                    [0,0,1],
+                ]),
+                "R U R' U' L' U R U' L":np.array([
+                    [1,0,0],
+                    [0,0,0],
+                    [0,0,1],
+                    [0,0,0],
+                ]),
+                "R2 D R' U2 R D' R' U2 R'":np.array([
+                    [1,0,1],
+                    [0,0,0],
+                    [0,0,0],
+                    [0,0,0],
+                ]),
+            },
+            3:{
+                "R U R' U R U2 R'":np.array([
+                    [0,0,1],
+                    [0,0,1],
+                    [0,0,1], 
+                    [0,0,0],
+                ]),
+                "R U2 R' U' R U' R'":np.array([
+                    [1,0,0],
+                    [1,0,0],
+                    [0,0,0],
+                    [1,0,0],
+                ]),
+            },
+            4:{
+                "R U2 R' U' R U R' U' R U' R'":np.array([
+                    [1,0,1],
+                    [0,0,0],
+                    [1,0,1],
+                    [0,0,0],   
+                ]),
+                "R U2 R2 U' R2 U' R2 U2 R":np.array([
+                    [0,0,1],
+                    [0,0,0],
+                    [1,0,0],
+                    [1,0,1],
+                ]),
+            },
+        }
+        
+    def identify_orentiation_case(self): 
+        faces = ["F", "R", "B", "L"]
+        last_layer = []
+        for face in faces:
+            current_face = self.get_face(face)[0].copy()
+            last_layer.append((current_face == 'y').astype(int))  # <-- fixed here
+        last_layer = np.array(last_layer)
+        num_unoriented_corners = np.sum(last_layer)
+
+        if (num_unoriented_corners == 0):
+            return []
+
+        orientation_class = self.last_layer_cross_algorithm_table[num_unoriented_corners]         
+        last_layer_case = []
+
+        #Ensure that all the possible orientations of the last layer are checked
+        for _ in range(4):
+            last_layer_case.append(last_layer)
+            last_layer = np.roll(last_layer,shift=-1,axis=0)
+
+        for _ in range(4):
+            for algorithm, case in orientation_class.items():
+                if (np.all(case == last_layer_case[_])):
+                    algorithm = algorithm.split()
+                    if (_ == 0):
+                        return algorithm
+                    else:
+                        algorithm.insert(0, "U" if _ == 1 else "U2" if _ == 2 else "U'")
+                        return algorithm
+                
+    def solve_oll(self):
+        solution = self.identify_orentiation_case()
+        self.apply_solution(solution)
+        new_cube = self.get_state()
+
+        return new_cube, solution
+
 if __name__ == '__main__':
     cube_state = {
         'U': np.array([['y', 'y', 'y'], ['y', 'y', 'y'], ['y', 'y', 'y']]),
@@ -1274,6 +1365,10 @@ if __name__ == '__main__':
     new_cube, last_layer_yellow_cross_solution = last_layer_yellow_cross_solver.solve_yellow_cross()
     cube.set_state(new_cube)
 
+    oll_solver = oll_solver(cube)
+    new_cube, oll_solution = oll_solver.solve_oll()
+    cube.set_state(new_cube)
+    
     cube.display_cube()
 
 
