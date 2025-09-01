@@ -1,7 +1,7 @@
 import numpy as np
 import math
 import copy
-import re
+from sklearn.neighbors import KDTree
 
 class Cube:
     def __init__(self,cube_data):
@@ -485,6 +485,8 @@ class corner_solver(Cube):
         self.corner = None
         self.setup_move_length = 0
 
+        self.new_cube = Cube(cube_data.get_state())
+
     def get_adjencent_sticker_positions(self,face,position):
         return self.corner_sticker_table[(face,position)]
     
@@ -496,35 +498,35 @@ class corner_solver(Cube):
 
         #Locate the white corner piece on the horizontal faces
         for face in self.horizontal_faces:
-            if (self.get_sticker(face,(0,0)) == 'w'):
+            if (self.new_cube.get_sticker(face,(0,0)) == 'w'):
                 return (face,(0,0))
-            if (self.get_sticker(face,(0,2)) == 'w'):
+            if (self.new_cube.get_sticker(face,(0,2)) == 'w'):
                 return (face,(0,2))
         
         #Locate the white corner piece on the top face
         for position in self.positions:
-            if (self.get_sticker("U",position) == 'w'):
+            if (self.new_cube.get_sticker("U",position) == 'w'):
                 return ("U", position)
             
         #Locate the white corner pieces that's on the bottom layer
         for face in self.horizontal_faces:
-            if (self.get_sticker(face,(2,0)) == 'w'):
+            if (self.new_cube.get_sticker(face,(2,0)) == 'w'):
                 return (face,(2,0))
-            if (self.get_sticker(face,(2,2)) == 'w'):
+            if (self.new_cube.get_sticker(face,(2,2)) == 'w'):
                 return (face,(2,2))
             
         #Locate the white corner piece on the bottom face
         for position in self.positions:
-            if (self.get_sticker("D",position) == 'w'):
+            if (self.new_cube.get_sticker("D",position) == 'w'):
                 #Check if corner piece is oriented correctly
                 sticker_position_1, sticker_position_2 = self.get_adjencent_sticker_positions("D",position)
 
                 face_1 = sticker_position_1[0]
                 face_2 = sticker_position_2[0]
 
-                center_color_1, center_color_2 = self.get_center_color(face_1),self.get_center_color(face_2)
-                sticker_color_1 = self.get_sticker(face_1,sticker_position_1[1])
-                sticker_color_2 = self.get_sticker(face_2,sticker_position_2[1])
+                center_color_1, center_color_2 = self.new_cube.get_center_color(face_1),self.new_cube.get_center_color(face_2)
+                sticker_color_1 = self.new_cube.get_sticker(face_1,sticker_position_1[1])
+                sticker_color_2 = self.new_cube.get_sticker(face_2,sticker_position_2[1])
 
                 if (sticker_color_1 == center_color_1 and sticker_color_2 == center_color_2):
                     continue
@@ -548,16 +550,16 @@ class corner_solver(Cube):
             sticker_position_1 = corner_sticker_1[1]
             sticker_position_2 = corner_sticker_2[1]
 
-            center_color_1 = self.get_center_color(face_1)
-            center_color_2 = self.get_center_color(face_2)
+            center_color_1 = self.new_cube.get_center_color(face_1)
+            center_color_2 = self.new_cube.get_center_color(face_2)
 
-            sticker_color_1 = self.get_sticker(face_1, sticker_position_1)
-            sticker_color_2 = self.get_sticker(face_2, sticker_position_2)
+            sticker_color_1 = self.new_cube.get_sticker(face_1, sticker_position_1)
+            sticker_color_2 = self.new_cube.get_sticker(face_2, sticker_position_2)
 
             if (sticker_color_1 == center_color_2 and sticker_color_2 == center_color_1):
                 break
             
-            self.apply_move("U")
+            self.new_cube.apply_move("U")
             self.corner = self.update_corner_after_U_move()
             setup_move.append('U')
 
@@ -572,7 +574,7 @@ class corner_solver(Cube):
         
         #Undo the setup move
         for _ in range(len(solution)):
-            self.apply_move("U'")
+            self.new_cube.apply_move("U'")
 
         if (solution.count("U") == 2):
             solution = ["U2"]
@@ -613,9 +615,7 @@ class corner_solver(Cube):
         #Update the corner position if it was originally in the bottom layer
         self.corner = (self.corner[0],(0,self.corner[1][1])) if (len(solution) != 0) else self.corner
 
-        self.setup_move_length = len(solution)
-
-        self.apply_solution(solution)
+        self.new_cube.apply_solution(solution)
 
         corner_sticker_1, corner_sticker_2 = self.get_adjencent_sticker_positions(self.corner[0],self.corner[1])
 
@@ -626,14 +626,14 @@ class corner_solver(Cube):
         sticker_position_2 = corner_sticker_2[1]
 
         #Sticker on the top
-        sticker_color_1 = self.get_sticker(face_1,sticker_position_1)
+        sticker_color_1 = self.new_cube.get_sticker(face_1,sticker_position_1)
 
         #Sticker/Center in the front/back
-        sticker_color_2 = self.get_sticker(face_2,sticker_position_2)
-        center_color_2 = self.get_center_color(face_2)
+        sticker_color_2 = self.new_cube.get_sticker(face_2,sticker_position_2)
+        center_color_2 = self.new_cube.get_center_color(face_2)
 
          #Center where the where sticker is 
-        center_color_white = self.get_center_color(self.corner[0])
+        center_color_white = self.new_cube.get_center_color(self.corner[0])
 
         if (self.corner[1] == (0,0)):
             
@@ -690,9 +690,7 @@ class corner_solver(Cube):
         #Update the corner position if it was originally in the bottom layer
         self.corner = (self.corner[0],(0,self.corner[1][1])) if (len(solution) != 0) else self.corner
 
-        self.setup_move_length = len(solution)
-
-        self.apply_solution(solution)
+        self.new_cube.apply_solution(solution)
 
         corner_sticker_1, corner_sticker_2 = self.get_adjencent_sticker_positions(self.corner[0],self.corner[1])
 
@@ -703,14 +701,14 @@ class corner_solver(Cube):
         sticker_position_2 = corner_sticker_2[1]
 
         #Sticker on the top
-        sticker_color_1 = self.get_sticker(face_1,sticker_position_1)
+        sticker_color_1 = self.new_cube.get_sticker(face_1,sticker_position_1)
 
         #Sticker/Center in the front/back
-        sticker_color_2 = self.get_sticker(face_2,sticker_position_2)
-        center_color_2 = self.get_center_color(face_2)
+        sticker_color_2 = self.new_cube.get_sticker(face_2,sticker_position_2)
+        center_color_2 = self.new_cube.get_center_color(face_2)
 
         #Center where the where sticker is
-        center_color_white = self.get_center_color(self.corner[0])
+        center_color_white = self.new_cube.get_center_color(self.corner[0])
 
         if (self.corner[1] == (0,0)):
         
@@ -756,26 +754,24 @@ class corner_solver(Cube):
         Generate the solution to solve the corner piece at the D face.
         """
 
-        self.setup_move_length = 3
-
         if (self.corner[1] == (0,0)):
             solution = ["L'","U","L"]
-            self.apply_solution(solution)
+            self.new_cube.apply_solution(solution)
             solution.extend(self.generate_corner_solution_L_face())
         
         if (self.corner[1] == (0,2)):
             solution = ["R","U'","R'"]
-            self.apply_solution(solution)
+            self.new_cube.apply_solution(solution)
             solution.extend(self.generate_corner_solution_R_face())
 
         if (self.corner[1] == (2,0)):
             solution = ["L'","U'","L"]
-            self.apply_solution(solution)
+            self.new_cube.apply_solution(solution)
             solution.extend(self.generate_corner_solution_L_face())
 
         if (self.corner[1] == (2,2)):
             solution = ["R","U","R'"]
-            self.apply_solution(solution)
+            self.new_cube.apply_solution(solution)
             solution.extend(self.generate_corner_solution_R_face())
 
         return solution
@@ -796,9 +792,7 @@ class corner_solver(Cube):
         #Update the corner position if it was originally in the bottom layer
         self.corner = (self.corner[0],(0,self.corner[1][1])) if (len(solution) != 0) else self.corner
 
-        self.setup_move_length = len(solution)
-
-        self.apply_solution(solution)
+        self.new_cube.apply_solution(solution)
 
         corner_sticker_1, corner_sticker_2 = self.get_adjencent_sticker_positions(self.corner[0],self.corner[1])
 
@@ -809,14 +803,14 @@ class corner_solver(Cube):
         sticker_position_2 = corner_sticker_2[1]
 
         #Sticker on the top
-        sticker_color_1 = self.get_sticker(face_1,sticker_position_1)
+        sticker_color_1 = self.new_cube.get_sticker(face_1,sticker_position_1)
 
         #Sticker/Center in the front/back
-        sticker_color_2 = self.get_sticker(face_2,sticker_position_2)
-        center_color_2 = self.get_center_color(face_2)
+        sticker_color_2 = self.new_cube.get_sticker(face_2,sticker_position_2)
+        center_color_2 = self.new_cube.get_center_color(face_2)
 
         #Center where the where sticker is
-        center_color_white = self.get_center_color(self.corner[0])
+        center_color_white = self.new_cube.get_center_color(self.corner[0])
 
         if (self.corner[1] == (0,0)):
 
@@ -872,9 +866,7 @@ class corner_solver(Cube):
         #Update the corner position if it was originally in the bottom layer
         self.corner = (self.corner[0],(0,self.corner[1][1])) if (len(solution) != 0) else self.corner
 
-        self.setup_move_length = len(solution)
-
-        self.apply_solution(solution)
+        self.new_cube.apply_solution(solution)
 
         corner_sticker_1, corner_sticker_2 = self.get_adjencent_sticker_positions(self.corner[0],self.corner[1])
 
@@ -885,14 +877,14 @@ class corner_solver(Cube):
         sticker_position_2 = corner_sticker_2[1]
 
         #Sticker on the top
-        sticker_color_1 = self.get_sticker(face_1,sticker_position_1)
+        sticker_color_1 = self.new_cube.get_sticker(face_1,sticker_position_1)
 
         #Sticker/Center in the front/back
-        sticker_color_2 = self.get_sticker(face_2,sticker_position_2)
-        center_color_2 = self.get_center_color(face_2)
+        sticker_color_2 = self.new_cube.get_sticker(face_2,sticker_position_2)
+        center_color_2 = self.new_cube.get_center_color(face_2)
 
         #Center where the where sticker is
-        center_color_white = self.get_center_color(self.corner[0])
+        center_color_white = self.new_cube.get_center_color(self.corner[0])
 
         if (self.corner[1] == (0,0)):
 
@@ -965,11 +957,11 @@ class corner_solver(Cube):
             if (self.corner == None):
                 break
             solution = self.generate_corner_solution()
-            self.apply_solution(solution[self.setup_move_length:])
+            self.apply_solution(solution)
             self.solutions.append(solution)
-            self.setup_move_length = 0
-            
-        new_cube = self.get_state()
+            new_cube = self.get_state()
+            self.new_cube.set_state(new_cube)
+
         return new_cube, self.solutions
 
 class second_layer_edge_solver(Cube):
@@ -1208,7 +1200,7 @@ class last_layer_yellow_cross_solver(Cube):
         super().__init__(cube_data.get_state())
 
     def generate_yellow_cross_solution(self) -> list[str]:
-        if (cube_state["U"][1,1] == 'y'):
+        if (self.get_center_color("U") == 'y'):
             positions = np.array([(0,1), (1,0), (1,2), (2,1)])
             yellow_face = self.get_face("U")
             row, col = zip(*positions)
@@ -1244,6 +1236,7 @@ class last_layer_yellow_cross_solver(Cube):
 class oll_solver(Cube):
     def __init__(self, cube_data):
         super().__init__(cube_data.get_state())
+        self.faces = ["F", "R", "B", "L"]
         self.last_layer_cross_algorithm_table = {
             2:{
                 "F R U' R' U' R U2 R' U' F'":np.array([
@@ -1252,7 +1245,7 @@ class oll_solver(Cube):
                     [1,0,0],
                     [0,0,1],
                 ]),
-                "R U R' U' L' U R U' L":np.array([
+                "R U R' U' L' U R U' L R'":np.array([
                     [1,0,0],
                     [0,0,0],
                     [0,0,1],
@@ -1296,9 +1289,8 @@ class oll_solver(Cube):
         }
         
     def identify_orentiation_case(self): 
-        faces = ["F", "R", "B", "L"]
         last_layer = []
-        for face in faces:
+        for face in self.faces:
             current_face = self.get_face(face)[0].copy()
             last_layer.append((current_face == 'y').astype(int))  # <-- fixed here
         last_layer = np.array(last_layer)
@@ -1332,6 +1324,144 @@ class oll_solver(Cube):
 
         return new_cube, solution
 
+class pll_solver(Cube):
+    def __init__(self, cube_data):
+        super().__init__(cube_data.get_state())
+        self.faces = ["F", "R", "B", "L"]
+        self.color_table = {
+            "g":0,
+            "o":1,
+            "b":2,
+            "r":3,
+        }
+        self.dataset = {
+            "R2 U R U R' U' R' U' R' U R'": np.array([[0,3,0],[1,0,1],[2,2,2],[3,1,3]]),
+            "R U' R U R U R U' R' U' R2": np.array([[0,1,0],[1,3,1],[2,2,2],[3,0,3]]),
+            "M2' U M2' U2 M2' U M2'": np.array([[0,2,0],[1,3,1],[2,0,2],[1,3,1]]),
+            "M2' U M2' U M' U2 M2' U2 M' U2": np.array([[0,1,0],[1,0,1],[2,3,2],[3,2,3]]),
+        }
+        self.setup_move = ["R","U2","R'","U'","R","U2","L'","U","R'","U'","L"]
+        self.last_layer = []
+
+        unique_cases_dict = self.generate_valid_transformations()
+
+        self.cases, self.algorithms = [],[]
+
+        for label, matrices in unique_cases_dict.items():
+            for mat in matrices:
+                self.cases.append(mat.flatten())  # Convert 4x3 matrix to 1D array
+                self.algorithms.append(label)
+
+        self.cases = np.array(self.cases)
+        self.algorithms = np.array(self.algorithms)
+
+        self.model = KDTree(self.cases, metric='euclidean')
+
+    def generate_valid_transformations(self):
+        unique_cases_dict = {}
+
+        for case_label, original_matrix in self.dataset.items():
+            cases = []
+
+            original_matrix = original_matrix.copy()
+            
+            # Generate row shifts (U moves)
+            for i in range(4):
+                cases.append(original_matrix)
+                for j in range(3):
+                    original_matrix += 1
+                    original_matrix %= 4
+                    cases.append(original_matrix.copy())
+                original_matrix += 1
+                original_matrix %= 4
+                original_matrix = np.roll(original_matrix, 1, axis=0)
+
+            # Remove duplicates
+            unique_cases = []
+            seen = set()
+            for case in cases:
+                case_tuple = tuple(map(tuple, case))
+                if case_tuple not in seen:
+                    seen.add(case_tuple)
+                    unique_cases.append(case)
+
+            unique_cases_dict[case_label] = unique_cases
+
+        return unique_cases_dict
+
+    def get_last_layer(self):
+        self.last_layer = np.array([self.get_face(face)[0] for face in self.faces])
+        self.preprocess_last_layer()
+
+    def preprocess_last_layer(self):
+        for i in range(4):
+            for j in range(3):
+                self.last_layer[i][j] = self.color_table[self.last_layer[i][j]]
+
+    def find_headlights(self):
+        for _ in range(4):
+            if (self.last_layer[_][0] == self.last_layer[_][2]):
+                return _
+        return -1
+    
+    def find_setup_move(self):
+        headlight_position = self.find_headlights()
+        if (headlight_position == -1):
+            return self.setup_move + ["U2"] + self.setup_move
+        elif (headlight_position == 0):
+            return ["U"] + self.setup_move
+        elif (headlight_position == 1):
+            return ["U2"] + self.setup_move
+        elif (headlight_position == 2):
+            return ["U'"] + self.setup_move
+        elif (headlight_position == 3):
+            return self.setup_move
+        return []
+    
+    def identify_permutation_case(self):
+        algorithm = []
+        self.get_last_layer()
+        algorithm.extend(self.find_setup_move())
+        return algorithm
+    
+    def reposition_last_layer(self):
+        auf_table = {
+            0:"U2",
+            1:"U'",
+            2:"",
+            3:"U",
+        }
+        reposition_move = []
+        mask = [int(len(np.unique(row)) == 1) for row in self.last_layer]
+        if (1 in mask):
+            idx = mask.index(1)
+            reposition_move.append(auf_table[idx])
+        else:
+            pass
+
+        return reposition_move
+
+    def classify_pll_kdtree(self):
+        self.last_layer = self.last_layer.astype(int).flatten().reshape(1, -1)
+        dist, ind = self.model.query(self.last_layer, k=1) 
+        return self.algorithms[ind[0][0]].split(' ')
+
+    def solve_pll(self):
+        self.get_last_layer()
+        setup_solution = self.identify_permutation_case()
+        self.apply_solution(setup_solution)
+
+        self.get_last_layer()
+        reposition_move = self.reposition_last_layer()
+        self.apply_solution(reposition_move)
+
+        self.get_last_layer()
+        algorithm = self.classify_pll_kdtree()
+        self.apply_solution(algorithm)
+
+        new_cube = self.get_state()
+        return new_cube, setup_solution
+
 if __name__ == '__main__':
     cube_state = {
         'U': np.array([['y', 'y', 'y'], ['y', 'y', 'y'], ['y', 'y', 'y']]),
@@ -1344,31 +1474,47 @@ if __name__ == '__main__':
 
     cube = Cube(cube_state)
 
-    scramble = "B R2 U2 F D2 L2 B2 L2 F2 U2 R D B2 L' F D F U R2 D'".split(' ')
+    scramble = "R U B2 D2 B U2 R2 B' D2 B D2 F U2 F R D' L' F2 L U2 R'".split(' ')
 
     for move in scramble:
         cube.apply_move(move)
 
     cross_solver = cross_solver(cube)
-    new_cube, solution = cross_solver.solve_cross()
+    new_cube, cross_solution = cross_solver.solve_cross()
     cube.set_state(new_cube)
+
+    #print(cross_solution)
 
     corner_solver = corner_solver(cube)
     new_cube, corner_solution = corner_solver.solve_corners()
     cube.set_state(new_cube)
 
+    #print(*corner_solution,sep='\n')
+
     edge_solver = second_layer_edge_solver(cube)
     new_cube, edge_solution = edge_solver.solve_edge()
     cube.set_state(new_cube)
+
+    #print(*edge_solution,sep='\n')
 
     last_layer_yellow_cross_solver = last_layer_yellow_cross_solver(cube)
     new_cube, last_layer_yellow_cross_solution = last_layer_yellow_cross_solver.solve_yellow_cross()
     cube.set_state(new_cube)
 
+    #print(last_layer_yellow_cross_solution)
+
     oll_solver = oll_solver(cube)
     new_cube, oll_solution = oll_solver.solve_oll()
     cube.set_state(new_cube)
+
+    #print(oll_solution)
+
+    pll_solver = pll_solver(cube)
+    new_cube, pll_solution = pll_solver.solve_pll()
+    cube.set_state(new_cube)
     
+    print(pll_solution)
+
     cube.display_cube()
 
 
