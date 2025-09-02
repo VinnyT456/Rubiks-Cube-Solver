@@ -482,8 +482,17 @@ class CubeScanner(QObject):
                     new_cube, last_layer_yellow_cross_solution = last_layer_yellow_cross.solve_yellow_cross()
 
                     cube = Cube(new_cube)
+
+                    oll = oll_solver(cube)
+                    new_cube, oll_solution = oll.solve_oll()
+
+                    cube = Cube(new_cube)
+
+                    pll = pll_solver(cube)
+                    new_cube, pll_solution = pll.solve_pll()
+
+                    cube = Cube(new_cube)
                     cube.display_cube()
-                
 
                 if (self.stickerless_mode):
                     self.predict_color_state = False
