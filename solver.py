@@ -1339,7 +1339,9 @@ class pll_solver(Cube):
             "R U' R U R U R U' R' U' R2": np.array([[0,1,0],[1,3,1],[2,2,2],[3,0,3]]),
             "M2' U M2' U2 M2' U M2'": np.array([[0,2,0],[1,3,1],[2,0,2],[1,3,1]]),
             "M2' U M2' U M' U2 M2' U2 M' U2": np.array([[0,1,0],[1,0,1],[2,3,2],[3,2,3]]),
+            "M2' U' M2' U' M' U2 M2' U2' M' U2":np.array([[0,3,0],[1,2,1],[2,1,2],[3,0,3]])
         }
+
         self.setup_move = ["R","U2","R'","U'","R","U2","L'","U","R'","U'","L"]
         self.last_layer = []
 
@@ -1437,9 +1439,38 @@ class pll_solver(Cube):
             idx = mask.index(1)
             reposition_move.append(auf_table[idx])
         else:
-            pass
+            new_cube = Cube(self.get_state())
+            while True:
+                sticker_color = new_cube.get_sticker("F",(0,0))
+                center_color = new_cube.get_center_color("F")
+                if (sticker_color != center_color):
+                    break
+                reposition_move.append("U")
+                new_cube.apply_move("U")
+
+            if (reposition_move.count("U") == 3):
+                reposition_move = ["U'"]
+            if (reposition_move.count("U") == 2):
+                reposition_move = ["U2"]
 
         return reposition_move
+
+    def find_final_auf(self):
+        new_cube = Cube(self.get_state())
+        auf = []
+        while True:
+            if (len(np.unique(new_cube.get_face("F").flatten())) == 1):
+                break
+
+            new_cube.apply_move("U")
+            auf.append("U")
+        
+        if (auf.count("U") == 3):
+            auf = ["U'"]
+        if (auf.count("U") == 2):
+            auf = ["U2"]
+
+        return auf
 
     def classify_pll_kdtree(self):
         self.last_layer = self.last_layer.astype(int).flatten().reshape(1, -1)
@@ -1449,6 +1480,7 @@ class pll_solver(Cube):
     def solve_pll(self):
         self.get_last_layer()
         setup_solution = self.identify_permutation_case()
+        print(setup_solution)
         self.apply_solution(setup_solution)
 
         self.get_last_layer()
@@ -1458,6 +1490,9 @@ class pll_solver(Cube):
         self.get_last_layer()
         algorithm = self.classify_pll_kdtree()
         self.apply_solution(algorithm)
+
+        auf = self.find_final_auf()
+        self.apply_solution(auf)
 
         new_cube = self.get_state()
         return new_cube, setup_solution
@@ -1474,7 +1509,7 @@ if __name__ == '__main__':
 
     cube = Cube(cube_state)
 
-    scramble = "R U B2 D2 B U2 R2 B' D2 B D2 F U2 F R D' L' F2 L U2 R'".split(' ')
+    scramble = "B U2 L2 U L F D F R F' L2 B' R2 B2 D2 B' U2 L2 F' R2 L'".split(' ')
 
     for move in scramble:
         cube.apply_move(move)
@@ -1483,39 +1518,38 @@ if __name__ == '__main__':
     new_cube, cross_solution = cross_solver.solve_cross()
     cube.set_state(new_cube)
 
-    #print(cross_solution)
+    print(cross_solution)
 
     corner_solver = corner_solver(cube)
     new_cube, corner_solution = corner_solver.solve_corners()
     cube.set_state(new_cube)
 
-    #print(*corner_solution,sep='\n')
+    print(*corner_solution,sep='\n')
 
     edge_solver = second_layer_edge_solver(cube)
     new_cube, edge_solution = edge_solver.solve_edge()
     cube.set_state(new_cube)
 
-    #print(*edge_solution,sep='\n')
+    print(*edge_solution,sep='\n')
 
     last_layer_yellow_cross_solver = last_layer_yellow_cross_solver(cube)
     new_cube, last_layer_yellow_cross_solution = last_layer_yellow_cross_solver.solve_yellow_cross()
     cube.set_state(new_cube)
 
-    #print(last_layer_yellow_cross_solution)
+    print(last_layer_yellow_cross_solution)
 
     oll_solver = oll_solver(cube)
     new_cube, oll_solution = oll_solver.solve_oll()
     cube.set_state(new_cube)
 
-    #print(oll_solution)
+    print(oll_solution)
 
     pll_solver = pll_solver(cube)
     new_cube, pll_solution = pll_solver.solve_pll()
     cube.set_state(new_cube)
-    
-    print(pll_solution)
 
     cube.display_cube()
+
 
 
 
