@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 import torch
 from solver import *
+from solution import *
 from torchvision import transforms, models
 from PIL import Image
 import sys
@@ -463,33 +464,47 @@ class CubeScanner(QObject):
 
                     cube = Cube(final_scramble)
 
+                    print("Position the cube to have the yellow face on top, white face on the bottom, and green face in front")
+
                     cross = cross_solver(cube)
                     new_cube, cross_solution = cross.solve_cross()
+
+                    cross_solution_to_words(cross_solution)
                     
                     cube = Cube(new_cube)
 
                     corner = corner_solver(cube)
                     new_cube, corner_solution = corner.solve_corners()
 
+                    corner_solution_to_words(corner_solution)
+
                     cube = Cube(new_cube)
 
                     second_layer_edge = second_layer_edge_solver(cube)
                     new_cube, second_layer_edge_solution = second_layer_edge.solve_edge()
+
+                    second_layer_edge_solution_to_words(second_layer_edge_solution)
 
                     cube = Cube(new_cube)
 
                     last_layer_yellow_cross = last_layer_yellow_cross_solver(cube)
                     new_cube, last_layer_yellow_cross_solution = last_layer_yellow_cross.solve_yellow_cross()
 
+                    last_layer_cross_solution_to_words(last_layer_yellow_cross_solution)
+
                     cube = Cube(new_cube)
 
                     oll = oll_solver(cube)
                     new_cube, oll_solution = oll.solve_oll()
 
+                    oll_solution_to_words(oll_solution)
+
                     cube = Cube(new_cube)
 
                     pll = pll_solver(cube)
                     new_cube, pll_solution = pll.solve_pll()
+
+                    pll_solution_to_words(pll_solution)
 
                     cube = Cube(new_cube)
                     cube.display_cube()
