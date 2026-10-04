@@ -48,7 +48,6 @@ def second_layer_edge_solution_to_words(edge_solution: list[list[str]]):
             move = edge_solution[i][j]
             print(f"{i+1}. {algorithm_word_conversion[move]}")
         print()
-    print()
 
 def last_layer_cross_solution_to_words(last_layer_cross_solution: list[str]):
     print("Last Layer Cross Solution:")
@@ -67,6 +66,7 @@ def oll_solution_to_words(oll_solution: list[str]):
 def pll_solution_to_words(pll_solution: list[str]):  
     print("PLL Solution:")
     for i in range(len(pll_solution)):
-        move = pll_solution[i]
+        # PLL algorithms spell some double turns as "M2'" or "U2'"
+        move = pll_solution[i].replace("2'", "2")
         print(f"{i+1}. {algorithm_word_conversion[move]}")
     print()

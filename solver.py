@@ -326,6 +326,7 @@ class Cube:
             moves[move]()  # apply once
             if double:
                 moves[move]()  # apply again if it's a double         
+
 class cross_solver(Cube):
     def __init__(self, cube_data):
         super().__init__(cube_data.get_state())
@@ -446,13 +447,13 @@ class corner_solver(Cube):
 
             ('F',(0,0)):[('U',(2,0)),('L',(0,2))],
             ('F',(0,2)):[('U',(2,2)),('R',(0,0))],
-            ('F',(2,0)):[('U',(0,0)),('R',(2,2))],
-            ('F',(2,2)):[('U',(0,2)),('L',(2,0))],
+            ('F',(2,0)):[('D',(0,0)),('L',(2,2))],
+            ('F',(2,2)):[('D',(0,2)),('R',(2,0))],
             
             ('B',(0,0)):[('U',(0,2)),('R',(0,2))],
             ('B',(0,2)):[('U',(0,0)),('L',(0,0))],
-            ('B',(2,0)):[('U',(2,2)),('R',(2,0))],
-            ('B',(2,2)):[('U',(2,0)),('L',(2,2))],
+            ('B',(2,0)):[('D',(2,2)),('R',(2,2))],
+            ('B',(2,2)):[('D',(2,0)),('L',(2,0))],
         }
         self.opposite_center_color_key = {
             'o':'r',
@@ -683,7 +684,7 @@ class corner_solver(Cube):
         
         #If the corner is in the bottom layer move it to the top
         if (self.corner[1] == (2,0)):
-            solution = ["R","U'","R'"]
+            solution = ["R","U","R'","U'"]
         if (self.corner[1] == (2,2)):
             solution = ["R'","U'","R","U"]
 
@@ -861,7 +862,7 @@ class corner_solver(Cube):
         if (self.corner[1] == (2,0)):
             solution = ["L","U","L'","U'"]
         if (self.corner[1] == (2,2)):
-            solution = ["L'","U","L"]
+            solution = ["L'","U'","L","U"]
 
         #Update the corner position if it was originally in the bottom layer
         self.corner = (self.corner[0],(0,self.corner[1][1])) if (len(solution) != 0) else self.corner
@@ -1480,7 +1481,6 @@ class pll_solver(Cube):
     def solve_pll(self):
         self.get_last_layer()
         setup_solution = self.identify_permutation_case()
-        print(setup_solution)
         self.apply_solution(setup_solution)
 
         self.get_last_layer()
@@ -1495,7 +1495,8 @@ class pll_solver(Cube):
         self.apply_solution(auf)
 
         new_cube = self.get_state()
-        return new_cube, setup_solution
+        solution = setup_solution + reposition_move + algorithm + auf
+        return new_cube, [move for move in solution if move]
 
 if __name__ == '__main__':
     cube_state = {

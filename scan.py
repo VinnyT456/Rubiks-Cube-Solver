@@ -3,6 +3,7 @@ import numpy as np
 import torch
 from solver import *
 from solution import *
+from solution_view import SolutionWindow
 from torchvision import transforms, models
 from PIL import Image
 import sys
@@ -463,6 +464,7 @@ class CubeScanner(QObject):
                     final_scramble['R'] = np.rot90(final_scramble['R'],2)                
 
                     cube = Cube(final_scramble)
+                    start_state = cube.get_state()
 
                     print("Position the cube to have the yellow face on top, white face on the bottom, and green face in front")
 
@@ -504,10 +506,23 @@ class CubeScanner(QObject):
                     pll = pll_solver(cube)
                     new_cube, pll_solution = pll.solve_pll()
 
+                    print(pll_solution)
+
                     pll_solution_to_words(pll_solution)
 
                     cube = Cube(new_cube)
                     cube.display_cube()
+
+                    stages = [
+                        ("Cross", cross_solution),
+                        ("Corners", [move for step in corner_solution for move in step]),
+                        ("Second Layer", [move for step in second_layer_edge_solution for move in step]),
+                        ("Yellow Cross", last_layer_yellow_cross_solution),
+                        ("OLL", oll_solution),
+                        ("PLL", pll_solution),
+                    ]
+                    self.solution_window = SolutionWindow(start_state, stages)
+                    self.solution_window.show()
 
                 if (self.stickerless_mode):
                     self.predict_color_state = False
